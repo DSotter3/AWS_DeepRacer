@@ -1,0 +1,61 @@
+import math
+
+def reward_function(params):
+
+    # Read input parameters
+    all_wheels_on_track = params['all_wheels_on_track']
+    distance_from_center = params['distance_from_center']
+    track_width = params['track_width']
+    speed = params['speed']
+    is_offtrack = params['is_offtrack']
+    heading = params['heading']
+    waypoints = params['waypoints']
+    closest_waypoints = params['closest_waypoints']
+    progress = params['progress']
+    steering_angle = params['steering_angle']
+    steps = params['steps']
+    is_reversed = params['is_reversed']
+
+    # Constants
+    TARGET_SPEED_STRAIGHT = 2.5  # Target speed for straight segments
+    TARGET_SPEED_TURN = 0.3  # Target speed for turns
+    STEERING_THRESHOLD = 15  # Threshold for considering a significant steering angle
+
+    # Discourage reversed and off track states
+    if is_offtrack or is_reversed:
+        return 1e-3
+
+    # Find nearest waypoints to figure out where the agent is on the track
+    next_point = waypoints[closest_waypoints[1]]
+    prev_point = waypoints[closest_waypoints[0]]
+
+    # Calculate the angle the car should be heading in regards to the next point
+    track_direction = math.atan2(next_point[1] - prev_point[1], next_point[0] - prev_point[0])
+
+    # Difference between car's path and ideal path between waypoints
+    direction_diff = abs((heading - track_direction + 180) % 360 - 180)
+
+    # Calculate the curvature of the track
+    future_point = waypoints[min(closest_waypoints[1] + 1, len(waypoints) - 1)]
+    future_direction = math.atan2(future_point[1] - next_point[1], future_point[0] - next_point[0])
+    future_direction_diff = abs((track_direction - future_direction + 180) % 360 - 180)
+    is_straight = future_direction_diff < STEERING_THRESHOLD
+
+    # Adjust speed reward based on track curvature
+    if is_straight:
+        speed_reward = min(speed / TARGET_SPEED_STRAIGHT, 1.0)
+    else:
+        speed_reward = min(speed / TARGET_SPEED_TURN, 1.0)
+
+    # Combine rewards
+    reward = speed_reward
+
+    # Penalize for steering too little or too much in curves
+    if not is_straight:
+        steering_penalty = 1 - (abs(steering_angle - direction_diff) / 45)
+        reward *= steering_penalty
+
+    if progress == 100 and steps > 0:
+        reward += 1000 / steps
+
+    return float(reward)
